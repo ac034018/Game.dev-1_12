@@ -1,0 +1,444 @@
+import pygame
+import random
+import os 
+import math
+import time
+
+WIDTH = 800
+HEIGHT = 600
+FPS = 30
+GROUND = HEIGHT - 80
+SLOW = 3
+FAST = 8
+
+PLAYER_ACC = 0.9
+PLAYER_FRICTION = -0.12
+PLAYER_GRAV = 0.9
+vec = pygame.math.Vector2
+
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+GRAY = (127,127,127)
+
+game_folder = os.path.dirname(__file__)
+img_folder = os.path.join(game_folder, "img")
+snd_folder = os.path.join(game_folder, "snd")
+
+class Player(pygame.sprite.Sprite):
+  def __init__(self):
+    pygame.sprite.Sprite.__init__(self)
+    self.image = pygame.image.load(os.path.join(img_folder, "p1_jump.png")).convert()
+    self.image.set_colorkey(BLACK)
+    self.rect = self.image.get_rect()
+    self.speedx = 0
+    self.shoot_delay = 250
+    self.last_shot = pygame.time.get_ticks() 
+
+    self.pos = vec(10, GROUND - 60)
+    self.vel = vec(0,0)
+    self.acc = vec(0,0)
+    
+  def shoot (self, mouse_x, mouse_y):
+    now = pygame.time.get_ticks()
+    if now - self.last_shot > self.shoot_delay:
+      self.last_shot = now
+      turnip = Turnip(self.rect.right,
+                      self.rect.centery,
+                      mouse_x,
+                      mouse_y)
+      all_sprites.add(turnip)
+      turnips.add(turnip)
+
+  def update (self):
+
+    self.acc = vec(0, PLAYER_GRAV)
+    
+    keystate = pygame.key.get_pressed()
+    if keystate[pygame.K_RIGHT]:
+      self.acc.x += PLAYER_ACC
+    if keystate[pygame.K_LEFT]:
+      self.acc.x += -PLAYER_ACC
+    if keystate[pygame.K_UP]:
+        self.vel.y = -20
+        jump_sound.play()
+    self.acc.x += self.vel.x * PLAYER_FRICTION
+
+    mouseState = pygame.mouse.get_pressed()
+    if mouseState[0] == 1:
+      pos = pygame.mouse.get_pos()
+      mouse_x = pos[0]
+      mouse_y = pos[1]
+
+      self.shoot(mouse_x,mouse_y)
+      shoot_sound.play()
+    
+    #if self.rect.right > WIDTH:
+      #self.rect.right = WIDTH
+    #if self.rect.left < 0:
+      #self.rect.left = 0
+
+    self.vel += self.acc
+    self.pos += self.vel + 0.5 * self.acc
+
+    if self.pos.x > WIDTH:
+        self.pos.x = 0
+    if self.pos.x < 0:
+        self.pos.x = WIDTH
+
+    if self.pos.y > GROUND:
+        self.pos.y = GROUND + 1
+        self.vel.y = 0
+
+    self.rect.midbottom = self.pos
+
+    hits = pygame.sprite.spritecollide(self, platforms, False)
+    if hits:
+       if self.rect.top > hits[0].rect.top :
+         self.pos.y = hits[0].rect.bottom + 25 +1
+         self.vel.y = 0
+       else:
+         self.pos.y = hits[0].rect.top + 1
+         self.vel.y = 0
+         
+font_name = pygame.font.match_font('arial')
+def draw_text(surf, text, size, x, y):
+  font = pygame.font.Font(font_name, size)
+  text_surface = font.render(text, True, BLACK )
+  text_rect = text_surface.get_rect()
+  text_rect.midtop = (x,y)
+  surf.blit(text_surface, text_rect)
+  
+def show_start_screen():
+  bkgr_image = pygame.image.load(os.path.join(img_folder, "background.jpg")).convert()
+  bkgr_image = pygame.transform.scale(bkgr_image,(WIDTH , HEIGHT))
+  bkgr_rect = bkgr_image.get_rect()
+  screen.blit(bkgr_image,bkgr_rect)
+  draw_text(screen, "Super Princess Peach!",64, WIDTH / 2, HEIGHT / 4)
+  draw_text(screen, "Arrow keys to move,Use mouse to shoot ", 22, WIDTH / 2, HEIGHT / 2)
+  draw_text(screen, "Press a key to begin ..", 18, WIDTH /2, HEIGHT * 3/4)
+  pygame.display.flip()
+  waiting = True
+  while waiting:
+    clock.tick(FPS)
+    for event in pygame.event.get():
+      if event.type == pygame.QUIT:
+        pygame.quit()
+      if event.type == pygame.KEYUP:
+        print("GAME START")
+        waiting = False
+
+def show_gameOver_screen():
+  bkgr_image = pygame.image.load(os.path.join(img_folder,"theend.jpg")).convert()
+  bkgr_image = pygame.transform.scale(bkgr_image,(WIDTH , HEIGHT))
+  bkgr_rect = bkgr_image.get_rect()
+  screen.blit(bkgr_image,bkgr_rect)
+  pygame.display.flip()
+  dead_sound.play()
+  waiting = True
+  while waiting:
+    clock.tick(FPS)
+    for event in pygame.event.get():
+      if event.type == pygame.QUIT:
+        pygame.quit()
+      if event.type == pygame.KEYUP:
+        print("GAME START")
+        waiting = False
+  
+class Platform(pygame.sprite.Sprite):
+  def __init__(self):
+    pygame.sprite.Sprite.__init__(self)
+    self.image = pygame.image.load(os.path.join(img_folder, "platform.png")).convert()
+    self.image.set_colorkey(BLACK)
+    self.rect = self.image.get_rect()
+    self.rect.center= (WIDTH/ 2, HEIGHT/ 2)
+  
+  def update (self):
+    self.rect.x += -5
+    if self.rect.left < 0:
+      self.rect.right = WIDTH
+      
+class Turnip(pygame.sprite.Sprite):
+  def __init__(self, start_x, start_y, dest_x, dest_y):
+        pygame.sprite.Sprite.__init__(self)
+
+        self.image =  self.image = pygame.image.load(os.path.join(img_folder, "turnip.png")).convert()
+
+        self.image_count = 0
+
+        self.image.set_colorkey(BLACK)
+
+        self.rect = self.image.get_rect()
+        self.rect.left= start_x
+        self.rect.bottom= start_y
+
+        self.floating_point_x = start_x
+        self.floating_point_y = start_y
+
+        x_diff = dest_x - start_x
+        y_diff = dest_y - start_y
+        angle = math.atan2(y_diff, x_diff)
+
+        self.speedx = 20
+        self.change_x = math.cos(angle) * self.speedx
+        self.change_y = math.sin(angle) * self.speedx
+
+  def update(self): 
+
+        self.floating_point_y += self.change_y
+        self.floating_point_x += self.change_x
+
+        self.rect.y = int(self.floating_point_y)
+        self.rect.x = int(self.floating_point_x)
+
+        self.image.set_colorkey(BLACK)
+
+        self.image_count += 1
+        if self.image_count > 5:
+            self.laser_count = 0
+
+        if self.rect.x < 0 or self.rect.x > WIDTH or self.rect.y < 0 or self.rect.y > HEIGHT:
+            self.kill()
+    
+class Mob(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.image.load(os.path.join(img_folder, "goomba.png")).convert()
+        self.image.set_colorkey(BLACK)
+        self.rect = self.image.get_rect()
+        self.rect.center= (WIDTH/ 1.24, HEIGHT/ 1.24)
+    def update (self):
+        self.rect.x += -5
+        if self.rect.left < 0:
+            self.rect.right = WIDTH
+
+class Fireball(pygame.sprite.Sprite):
+   def __init__(self,x,y):
+        pygame.sprite.Sprite.__init__(self)
+        
+        self.fireballs = [
+      pygame.image.load(os.path.join(img_folder, "sprite_fireball0.png")).convert(),
+      pygame.image.load(os.path.join(img_folder, "sprite_fireball1.png")).convert(),
+      pygame.image.load(os.path.join(img_folder, "sprite_fireball2.png")).convert(),
+      pygame.image.load(os.path.join(img_folder, "sprite_fireball3.png")).convert()
+      ]
+        self.fireball_count = 0
+
+        self.image = self.fireballs[self.fireball_count]
+        self.image = pygame.transform.scale(self.image,(100,100))
+        self.image_count = 0
+
+        self.image.set_colorkey(BLACK)
+
+        self.rect = self.image.get_rect()
+        self.rect.right= x
+        self.rect.centery= y
+        
+        self.speedx = -20
+
+   def update(self):
+    self.rect.x += self.speedx
+    if self.rect.x < 0:
+      self.kill()
+  
+
+class Boss(pygame.sprite.Sprite):
+  def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.image.load(os.path.join(img_folder, "bowser.png")).convert()
+        self.image.set_colorkey(GRAY)
+        self.image = pygame.transform.scale(self.image,(300,300))
+        self.rect = self.image.get_rect()
+        self.rect.center= (WIDTH/ 1.4, HEIGHT/ 1.4)
+        self.shoot_delay = 1000
+        self.last_shot = pygame.time.get_ticks()
+        
+  def update (self):
+      now = pygame.time.get_ticks()
+      if now - self.last_shot > self.shoot_delay:
+          self.last_shot = now
+          self.shoot()
+  def shoot (self):
+      fireball = Fireball(self.rect.left,self.rect.centery)
+      all_sprites.add(fireball)
+    
+
+class Timer():
+    def __init__(self):
+        self.start_time = 0
+
+    def start(self):
+        self.start_time = 0
+        self.start_time = pygame.time.get_ticks()
+        return self.start_time
+
+    def stop(self):
+        self.start_time = 0 
+
+    def getElapsedTime(self):
+        return (pygame.time.get_ticks() - self.start_time) / 1000
+
+class CrossHairs(pygame.sprite.Sprite):
+    def __init__(self):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = pygame.image.load(os.path.join(img_folder, "crosshair.png")).convert()
+        self.image = pygame.transform.scale(self.image,(30,30))
+        self.image.set_colorkey(GRAY)
+        self.rect = self.image.get_rect()
+        self.rect.x = 100
+        self.rect.y = 100
+        self.pos = vec(0,0)
+        self.timer = Timer()
+        self.setCH = False
+        self.old_x = 0
+        self.old_y = 0
+    def update(self):
+        mouseState = pygame.mouse.get_pressed()
+        pos = pygame.mouse.get_pos()
+        self.pos.x = pos[0]
+        self.pos.y = pos[1]
+        if mouseState[0] == 1 and self.setCH == False:
+            print("self.setCH", self.setCH)
+            print("self.timer.start()",self.timer.start())
+          
+            self.old_x = pos[0]
+            self.old_y = pos[1]
+
+            self.setCH = True
+            
+        if self.setCH and self.timer.getElapsedTime()< 2:
+            self.rect.centerx = self.old_x
+            self.rect.centery = self.old_y
+        else:
+            self.rect.centerx = self.pos.x
+            self.rect.centery = self.pos.y
+            self.setCH = False
+
+class HealthBar(pygame.sprite.Sprite):
+  def __init__(self):
+    pygame.sprite.Sprite.__init__(self)
+
+    self.healthbars = [
+      pygame.image.load(os.path.join(img_folder, "health_bar0.png")).convert(),
+      pygame.image.load(os.path.join(img_folder, "health_bar1.png")).convert(),
+      pygame.image.load(os.path.join(img_folder, "health_bar2.png")).convert(),
+      pygame.image.load(os.path.join(img_folder, "health_bar3.png")).convert(),
+      pygame.image.load(os.path.join(img_folder, "health_bar4.png")).convert(),
+      pygame.image.load(os.path.join(img_folder, "health_bar5.png")).convert(),
+      pygame.image.load(os.path.join(img_folder, "health_bar6.png")).convert()
+      ]
+    self.healthBar_count = 0
+
+    self.image = self.healthbars[self.healthBar_count]
+    self.image = pygame.transform.scale(self.image, (100, 50))
+    self.image.set_colorkey(BLACK)
+
+    self.rect = self.image.get_rect()
+    self.rect.x = 10
+    self.rect.y = 10
+
+  def getHealth(self):
+    return self.healthBar_count
+
+  def setHealth(self, health):
+    if health == 1:
+      self.healthBar_count -= 1
+      if self.healthBar_count < 0:
+        self.healthBar_count = 0
+    elif health == -1:
+      self.healthBar_count += 1
+     
+      
+    
+
+  def update(self):
+    self.image = self.healthbars[self.healthBar_count]
+    self.image = pygame.transform.scale(self.image, (100, 50))
+    self.image.set_colorkey(BLACK)
+  
+pygame.init()
+pygame.mixer.init()
+
+dead_sound= pygame.mixer.Sound(os.path.join(snd_folder,"Dead.wav"))
+shoot_sound= pygame.mixer.Sound(os.path.join(snd_folder,"turnipshoot.wav"))
+jump_sound= pygame.mixer.Sound(os.path.join(snd_folder,"Jump.wav"))
+pygame.mixer.music.load(os.path.join(snd_folder,"Peach-castle.mp3"))
+pygame.mixer.music.set_volume(0.4)
+
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("My Game")
+
+clock = pygame.time.Clock()
+pygame.mixer.music.play(loops =-1)
+image= pygame.image.load(os.path.join(img_folder, "background.png")).convert()
+background = pygame.transform.scale(image,(WIDTH, HEIGHT))
+background_rect = background.get_rect()
+bkgr_x = 0
+
+all_sprites = pygame.sprite.Group()
+turnips = pygame.sprite.Group()
+platforms = pygame.sprite.Group()
+platform = Platform ()
+all_sprites.add(platform)
+platforms.add(platform)
+mobs = pygame.sprite.Group()
+crossHairs = CrossHairs()
+all_sprites.add(crossHairs)
+boss = Boss()
+all_sprites.add(boss)
+player = Player()
+all_sprites.add(player)
+healthBar = HealthBar()
+all_sprites.add(healthBar)
+
+
+
+player = Player()
+all_sprites.add(player)
+
+def newMob ():
+  Goomba = Mob()
+  all_sprites.add(Goomba)
+  mobs.add(Goomba)
+
+newMob()
+
+start = True
+running = True
+end = False
+while running:
+    
+  if start:
+    show_start_screen()
+    start = False
+
+  if healthBar.getHealth() > 6:
+    show_gameOver_screen()
+    pygame.mixer.music.stop()
+    end = True
+
+  clock.tick(FPS)
+
+  for event in pygame.event.get():
+    if event.type == pygame.QUIT:
+      running = False
+ 
+  all_sprites.update()
+
+  hits = pygame.sprite.spritecollide(player, mobs,True)
+  for hit in hits:
+    healthBar.setHealth(-1)
+    newMob()
+  
+  rel_x = bkgr_x % background.get_rect().width
+  screen.blit(background,(rel_x - background.get_rect().width,0))
+  if rel_x < WIDTH:
+    screen.blit(background, (rel_x,0))
+  bkgr_x -= 1
+
+  all_sprites.draw(screen)
+
+  pygame.display.flip()
+pygame.quit()
